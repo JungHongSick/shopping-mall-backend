@@ -1,4 +1,5 @@
 const oracledb = require('oracledb');
+const express = require('express')
 const path = require("path");
 const fs = require("fs/promises");
 
@@ -14,13 +15,16 @@ async function testConnection() {
 
         console.log('Oracle DB 연결 성공!');
         const sql = await fs.readFile(
-            path.join(__dirname, 'sql', 'test.sql'),
+            path.join(__dirname, 'sql', 'queries.sql'),
             'utf8'
         )
-
+        
         const result = await connection.execute(
-             sql.trim().replace(/;\s*$/, '')
+             sql.trim().replace(/;\s*$/, ''),
+             [],
+             { outFormat: oracledb.OUT_FORMAT_OBJECT }
         );
+        
 
         console.log('SQL 실행 결과:', result.rows);
 
