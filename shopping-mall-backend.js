@@ -19,6 +19,28 @@ app.get('/products', async function(req,res){
     }
 })
 
+app.get('/products/:id', async function(req, res) {
+    try {
+        const id = Number(req.params.id);
+        if(!Number.isInteger(id) || id <= 0){
+            return res.status(400).json({
+                message: "유효하지 않은 상품 번호입니다."
+            });
+        }
+        const products = await ProductDetailConnection(id);
+        if(products.length === 0){
+            return res.status(404).json({
+                message:"유효하지 않은 상품 조회입니다."
+            })
+        }
+        res.json(products);
+
+    } catch(error) {
+        res.status(500).json({
+            message: "상품 조회에 실패했습니다."
+        });
+    }
+});
 async function ProductsConnection() {
     let productsconnection;
         try{
@@ -51,6 +73,41 @@ async function ProductsConnection() {
         }
         }
 }
+
+async function ProductDetailConnection(id) {
+    let ProductDetailConnection;
+        try{
+            const sql = await fs.readFile(
+            path.join(__dirname, 'sql', 'product-detail.sql'),
+            'utf8'
+        )
+            ProductDetailConnection = await oracledb.getConnection({
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            connectString: process.env.DB_CONNECT_STRING
+            })
+            console.log('DB 연결 성공');
+            
+            const result = await ProductDetailConnection.execute(
+                sql.trim().replace(/;\s*$/, ''),
+                { id:id },
+                { outFormat: oracledb.OUT_FORMAT_OBJECT }
+            );
+            
+            return result.rows;
+
+        }catch(error){
+                console.error('오류 발생:', error.message);
+                throw error;
+        }finally{
+        if (ProductDetailConnection) {
+            await ProductDetailConnection.close();
+            console.log('DB 연결 종료');
+        }
+        }
+}
+
+
     
 app.listen(52273, function () {
     console.log('쇼핑몰 서버 시작!');
