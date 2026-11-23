@@ -3,6 +3,9 @@ const express = require('express')
 const path = require("path");
 const fs = require("fs/promises");
 const app = express();
+app.use(express.json())
+
+
 
 console.log('Express 로딩 성공');
 console.log('OracleDB 로딩 성공');
@@ -18,6 +21,8 @@ app.get('/products', async function(req,res){
         })
     }
 })
+
+
 
 app.get('/products/:id', async function(req, res) {
     try {
@@ -41,6 +46,80 @@ app.get('/products/:id', async function(req, res) {
         });
     }
 });
+
+
+
+app.post('/products', async function(req, res){
+    try{
+    console.log('전달받은 데이터', req.body)
+
+    if (!req.body ||
+    typeof req.body !== 'object' ||
+    Array.isArray(req.body)) {
+    return res.status(400).json({
+        message: "유효하지 않은 요청 데이터입니다."
+    });
+    }
+
+    if(!Number.isInteger(req.body.product_price) ||
+        req.body.product_price < 0 ||
+        req.body.product_price > 9999999999 
+
+    ){
+        return res.status(400).json({
+            message: "유효하지 않은 가격입니다."
+        })
+    }
+    
+    if(typeof req.body.product_name !== 'string'||
+        req.body.product_name.trim() === '' ||
+        Buffer.byteLength(req.body.product_name, 'utf8') > 20
+    ){
+         return res.status(400).json({
+            message: "유효하지 않은 이름입니다."
+        })
+    }
+
+    if(!Number.isInteger(req.body.product_stock) ||
+        req.body.product_stock < 0 ||
+        req.body.product_stock > 99999 
+       
+    ){
+         return res.status(400).json({
+            message: "유효하지 않은 수량입니다."
+        })
+    }
+
+    if(!Number.isInteger(req.body.categories_number) ||
+        req.body.categories_number <= 0 ||
+        req.body.categories_number == null
+    ){
+        return res.status(400).json({
+            message: "유효하지 않은 숫자입니다."
+        })
+    }
+    const rowsAffected = await ProductInsertConnection(req.body) 
+    res.status(201).json({
+        message: "상품 등록 성공",
+        rowsAffected: rowsAffected
+    });
+    }catch(error){
+        console.error('상품 등록 오류:', error.message);
+        
+        if(error.code == 'ORA-02291'){
+            return res.status(400).json({
+                message:"존재 하지 않은 상품 카테고리 입니다."
+            })
+        }
+
+        res.status(500).json({
+            message: "상품 등록에 실패했습니다."
+        });   
+    }
+});
+
+
+
 async function ProductsConnection() {
     let productsconnection;
         try{
@@ -106,6 +185,43 @@ async function ProductDetailConnection(id) {
         }
         }
 }
+
+async function ProductInsertConnection(product) {
+    let connection;
+        try{
+            const sql = await fs.readFile(
+            path.join(__dirname, 'sql', 'product-insert.sql'),
+            'utf8'
+        )
+            connection = await oracledb.getConnection({
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            connectString: process.env.DB_CONNECT_STRING
+            })
+            console.log('DB 연결 성공');
+            
+            const result = await connection.execute(
+                sql.trim().replace(/;\s*$/, ''),
+                {PRONAME: product.product_name,
+                 PROPRICE: product.product_price, 
+                 PROSTOCK: product.product_stock, 
+                 PROCATEID: product.categories_number},
+                { autoCommit: true }
+            );
+            
+            return result.rowsAffected;
+
+        }catch(error){
+                console.error('오류 발생:', error.message);
+                throw error;
+        }finally{
+        if (connection) {
+            await connection.close();
+            console.log('DB 연결 종료');
+        }
+        }
+}
+
 
 
     
