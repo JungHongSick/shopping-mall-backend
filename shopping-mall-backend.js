@@ -187,6 +187,42 @@ app.put('/products/:id', async function(req, res){
 
 
 
+app.delete('/products/:id', async function(req, res){
+    try{
+    const id = Number(req.params.id);
+
+    if(!Number.isInteger(id) || id <= 0){
+       return res.status(400).json({
+            message: '유효하지 않은 상품 번호입니다.'
+        })
+    }
+    const result = await ProductDeleteConnection(id)
+
+    if(result === 1){
+        return res.status(200).json({
+            message: '상품 삭제가 완료되었습니다.'
+        })
+    }if(result === 0){
+        return res.status(404).json({
+            message: '상품이 존재하지 않습니다.'
+        })
+    }
+    throw new Error('예상하지 못한 상품 삭제 결과입니다.')
+    }catch(error){
+        console.error('상품 삭제 오류:', error.message);
+
+        if(error.code === 'ORA-02292'){
+            return res.status(409).json({
+                message:"참조 중인 상품은 삭제할 수 없습니다."
+            })
+        }
+        
+     return res.status(500).json({
+        message: "상품 삭제에 실패했습니다."
+     })
+    }
+})
+
 
 async function ProductsConnection() {
     let productsconnection;
@@ -327,7 +363,38 @@ async function ProductUpdateConnection(product, id) {
         }
 }
 
+async function ProductDeleteConnection(id) {
+    let connection;
+        try{
+            const sql = await fs.readFile(
+            path.join(__dirname, 'sql', 'product-delete.sql'),
+            'utf8'
+        )
+            connection = await oracledb.getConnection({
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            connectString: process.env.DB_CONNECT_STRING
+            })
+            console.log('DB 연결 성공');
+            
+            const result = await connection.execute(
+                sql.trim().replace(/;\s*$/, ''),
+                {id: id},
+                { autoCommit: true }
+            );
+            
+            return result.rowsAffected;
 
+        }catch(error){
+                console.error('오류 발생:', error.message);
+                throw error;
+        }finally{
+        if (connection) {
+            await connection.close();
+            console.log('DB 연결 종료');
+        }
+        }
+}
 
     
 app.listen(52273, function () {
